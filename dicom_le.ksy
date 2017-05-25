@@ -1,14 +1,65 @@
 meta:
-  id: dicom_common
+  id: dicom_le
   title: Digital Imaging and Communications in Medicine (DICOM) file format
   file-extension: dcm
   license: MIT
   endian: le
 doc-ref: http://dicom.nema.org/medical/dicom/current/output/html/part10.html
 doc: |
-  Common types for little endian DICOM files
-seq: []
+  DICOM (Digital Imaging and Communications in Medicine), AKA NEMA
+  PS3, AKA ISO 12052:2006, is a file format and network protocol
+  standard for medical imaging purposes. This parser covers file
+  format, typically written by various medical equipment, such as
+  radiography, computer tomography scans, MRT, ultrasonography, etc.
+
+  DICOM defines two transfer syntaxes: implicit and explicit. This
+  top-level parser attempts to autodetect and handle both of them. If
+  any problems arise, one can use `file_explicit` and `file_implicit`
+  subtypes to force parsing in particular transfer syntax.
+seq:
+  - id: file_header
+    type: t_file_header
+  - id: dataset
+    type: t_dataset
 types:
+  file_explicit:
+    doc: |
+      This type parses DICOM files with explicit transfer syntax.
+    seq:
+      - id: file_header
+        type: t_file_header
+      - id: dataset
+        type: t_dataset_explicit
+    types:
+      t_dataset_explicit:
+        seq:
+          - id: elements
+            type: t_dataentry_explicit
+            repeat: eos
+  file_implicit:
+    doc: |
+      This type parses DICOM files with implicit transfer syntax.
+    seq:
+      - id: file_header
+        type: t_file_header
+      - id: dataset
+        type: t_dataset_implicit
+    types:
+      t_dataset_implicit:
+        seq:
+          - id: elements
+            type: t_dataentry_implicit
+            repeat: eos
+  t_dataset:
+    seq:
+      - id: elements1
+        type: t_dataentry_implicit
+        if: not _io.eof
+        repeat: until
+        repeat-until: _io.eof or _.is_transfer_syntax_change_explicit
+      - id: elements2
+        type: t_dataentry_explicit
+        repeat: eos
   t_file_header:
     seq:
       - id: preamble
@@ -62,7 +113,6 @@ types:
         value: content != [49, 46, 50, 46, 56, 52, 48, 46, 49, 48, 48, 48, 56, 46, 49, 46, 50, 46, 49, 0]
       is_transfer_syntax_change_explicit:
         value: tag_group == 2 and tag_elem == 16 and p_is_transfer_syntax_change_non_implicit
-
   t_dataentry_explicit:
     seq:
       - id: tag_group
@@ -104,12 +154,11 @@ types:
         value: not has_elements
       is_definite:
         value: header.content_length != 0xffffffff
-
   t_entry_header_explicit:
     seq:
       - id: vr
         type: str
-        encoding: 'ascii'
+        encoding: ASCII
         size: 2
       - id: p_reserved
         type: u2
@@ -124,10 +173,32 @@ types:
       content_length:
         value: 'length_is_long ? p_content_length_u4 : p_content_length_u2'
       length_is_long:
-        value: not (vr == 'AE' or vr == 'AS' or vr == 'AT' or vr == 'CS' or vr == 'DA' or vr == 'DS' or vr == 'DT' or vr == 'FL' or vr == 'FD' or vr == 'IS' or vr == 'LO' or vr == 'PN' or vr == 'SH' or vr == 'SL' or vr == 'SS' or vr == 'ST' or vr == 'TM' or vr == 'UI' or vr == 'UL' or vr == 'US' or vr == 'LT')
+        value: >
+          not (
+            vr == 'AE' or
+            vr == 'AS' or
+            vr == 'AT' or
+            vr == 'CS' or
+            vr == 'DA' or
+            vr == 'DS' or
+            vr == 'DT' or
+            vr == 'FL' or
+            vr == 'FD' or
+            vr == 'IS' or
+            vr == 'LO' or
+            vr == 'PN' or
+            vr == 'SH' or
+            vr == 'SL' or
+            vr == 'SS' or
+            vr == 'ST' or
+            vr == 'TM' or
+            vr == 'UI' or
+            vr == 'UL' or
+            vr == 'US' or
+            vr == 'LT'
+          )
       is_seq:
         value: vr == 'SQ'
-
   t_entry_header_implicit:
     seq:
       - id: content_length
