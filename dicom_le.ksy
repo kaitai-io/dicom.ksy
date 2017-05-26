@@ -51,6 +51,7 @@ types:
             type: t_dataentry_implicit
             repeat: eos
   t_dataset:
+    doc-ref: http://dicom.nema.org/dicom/2013/output/chtml/part05/chapter_7.html
     seq:
       - id: elements1
         type: t_dataentry_implicit
@@ -73,23 +74,23 @@ types:
       - id: tag_elem
         type: u2
       - id: header
-        type: t_entry_header_implicit
-        if: entry_implicit
-      - id: header
-        type: t_entry_header_explicit
-        if: not entry_implicit
+        type:
+          switch-on: entry_implicit
+          cases:
+            true: t_entry_header_implicit
+            false: t_entry_header_explicit
       - id: content
-        size: header.content_length
+        size: header_content_length
         if: has_content
-      - id: elements
+      - id: elements_1
         type: t_dataentry_implicit
         if: has_elements and not is_definite
         repeat: until
         repeat-until: _.is_closing_tag
-      - id: elements
+      - id: elements_2
         type: t_elements
         if: has_elements and is_definite
-        size: header.content_length
+        size: header_content_length
     types:
       t_elements:
         seq:
@@ -102,17 +103,27 @@ types:
       is_closing_tag:
         value: (tag_group == 0xfffe) and (tag_elem & 0xff00 == 0xe000) and (tag_elem != 0xe000)
       has_elements:
-        value: (tag_group == 0xfffe and tag_elem == 0xe000) or header.is_seq
+        value: (tag_group == 0xfffe and tag_elem == 0xe000) or header_is_seq
       has_content:
         value: not has_elements
       is_definite:
-        value: header.content_length != 0xffffffff
+        value: header_content_length != 0xffffffff
       p_is_transfer_syntax_change_non_implicit:
         # '1.2.840.10008.1.2.1\0' (Explicit VR Little Endian)
         # See http://www.dicomlibrary.com/dicom/transfer-syntax/
         value: content != [49, 46, 50, 46, 56, 52, 48, 46, 49, 48, 48, 48, 56, 46, 49, 46, 50, 46, 49, 0]
       is_transfer_syntax_change_explicit:
         value: tag_group == 2 and tag_elem == 16 and p_is_transfer_syntax_change_non_implicit
+      header_is_seq:
+        value: >-
+          entry_implicit ?
+            header.as<t_entry_header_implicit>.is_seq :
+            header.as<t_entry_header_explicit>.is_seq
+      header_content_length:
+        value: >-
+          entry_implicit ?
+            header.as<t_entry_header_implicit>.content_length :
+            header.as<t_entry_header_explicit>.content_length
   t_dataentry_explicit:
     seq:
       - id: tag_group
