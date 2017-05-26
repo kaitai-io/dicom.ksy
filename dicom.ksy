@@ -20,7 +20,8 @@ seq:
   - id: file_header
     type: t_file_header
   - id: elements
-    type: element_list_explicit
+    type: t_data_element_implicit
+    repeat: eos
 types:
   t_file_header:
     seq:
@@ -28,23 +29,6 @@ types:
         size: 128
       - id: magic
         contents: 'DICM'
-#  element_list_implicit:
-#    seq:
-#      - id: current
-#        type: t_data_element_implicit
-#      - id: next
-#        type: element_list_implicit
-#        if: not _io.eof
-  element_list_explicit:
-    seq:
-      - id: elements
-        type: t_data_element_explicit
-        repeat: eos
-#      - id: current
-#        type: t_data_element_explicit
-#      - id: next
-#        type: element_list_explicit
-#        if: not _io.eof
   t_data_element_explicit:
     doc-ref: 'http://dicom.nema.org/medical/dicom/current/output/html/part05.html#sect_7.1.2'
     seq:
@@ -74,6 +58,10 @@ types:
         repeat: until
         repeat-until: _.tag_elem == 0xe0dd
         if: vr == 'SQ' and value_len == 0xffff_ffff
+      - id: elements_implicit
+        type: t_data_element_implicit
+        repeat: eos
+        if: is_transfer_syntax_change_implicit
     instances:
       is_forced_implicit:
         value: tag_group == 0xfffe
@@ -90,9 +78,73 @@ types:
           vr == 'UR' or
           vr == 'UT' or
           vr == 'UN'
+#      p_is_transfer_syntax_change_non_implicit:
+#        # '1.2.840.10008.1.2.1\0' (Explicit VR Little Endian)
+#        # See http://www.dicomlibrary.com/dicom/transfer-syntax/
+#        value: value != [49, 46, 50, 46, 56, 52, 48, 46, 49, 48, 48, 48, 56, 46, 49, 46, 50, 46, 49, 0]
+      is_transfer_syntax_change_implicit:
+        value: false
       tag:
         value: 'tag_group << 16 | tag_elem'
         enum: tags
+  t_data_element_implicit:
+    doc-ref: 'http://dicom.nema.org/medical/dicom/current/output/html/part05.html#sect_7.1.2'
+    seq:
+      - id: tag_group
+        type: u2
+      - id: tag_elem
+        type: u2
+      - id: vr
+        type: str
+        encoding: ASCII
+        size: 2
+        if: is_forced_explicit
+      - id: reserved
+        type: u2
+        if: is_long_len and is_forced_explicit
+      - id: value_len
+        type:
+          switch-on: 'is_forced_explicit ? is_long_len : true'
+          cases:
+            false: u2
+            true: u4
+      - id: value
+        size: value_len
+        if: value_len != 0xffff_ffff
+      - id: items
+        type: seq_item
+        repeat: until
+        repeat-until: _.tag_elem == 0xe0dd
+        if: vr == 'SQ' and value_len == 0xffff_ffff
+      - id: elements
+        type: t_data_element_explicit
+        repeat: eos
+        if: is_transfer_syntax_change_explicit
+    instances:
+      is_forced_explicit:
+        value: tag_group == 0x0002
+      is_long_len:
+        value: >
+          is_forced_explicit and (
+          vr == 'OB' or
+          vr == 'OD' or
+          vr == 'OF' or
+          vr == 'OL' or
+          vr == 'OW' or
+          vr == 'SQ' or
+          vr == 'UC' or
+          vr == 'UR' or
+          vr == 'UT' or
+          vr == 'UN')
+      tag:
+        value: 'tag_group << 16 | tag_elem'
+        enum: tags
+      p_is_transfer_syntax_change_explicit:
+        # '1.2.840.10008.1.2.1\0' (Explicit VR Little Endian)
+        # See http://www.dicomlibrary.com/dicom/transfer-syntax/
+        value: value == [49, 46, 50, 46, 56, 52, 48, 46, 49, 48, 48, 48, 56, 46, 49, 46, 50, 46, 49, 0]
+      is_transfer_syntax_change_explicit:
+        value: p_is_transfer_syntax_change_explicit
   seq_item:
     seq:
       - id: tag_group
