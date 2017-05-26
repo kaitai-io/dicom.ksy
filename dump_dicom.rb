@@ -51,7 +51,7 @@ end
 
 def dump_file(fn)
   d = Dicom.from_file(fn)
-  dump_elements(d.elements.elements)
+  dump_elements(d.elements)
 end
 
 ARGV.each { |fn|
