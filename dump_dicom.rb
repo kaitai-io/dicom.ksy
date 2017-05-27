@@ -46,7 +46,15 @@ def dump_element(e)
 end
 
 def dump_elements(ee)
-  ee.map { |e| dump_element(e) }.delete_if { |x| x.nil? }
+  r = []
+  ee.each { |e|
+    r << dump_element(e)
+    if e.respond_to?(:elements) and e.elements
+      rr = dump_elements(e.elements)
+      r += rr
+    end
+  }
+  r.delete_if { |x| x.nil? }
 end
 
 def dump_file(fn)
